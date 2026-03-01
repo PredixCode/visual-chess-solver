@@ -25,6 +25,10 @@ class Config:
     def move_pieces(self) -> bool:
         return bool(self.bot_config.get("move_pieces", False))
     
+    @cached_property
+    def play_like_human(self) -> bool:
+        return bool(self.bot_config.get("play_like_human", False))
+    
     # Stockfish Config
     @cached_property
     def stockfish_config(self) -> dict:
@@ -58,7 +62,7 @@ class Config:
     @cached_property
     def think_time(self) -> int | None:
         try:
-            return int(self.stockfish_config["thinking_time_in_ms"])
+            return min(int(self.stockfish_config["thinking_time_in_ms"]), 5000)
         except Exception:
             return None
         
@@ -73,7 +77,8 @@ class Config:
         lines = [
             f"\n|{8*'─'} CONFIGURATION {8*'─'}│",
             f"├──┬ Bot Settings:",
-            f"│  └─ Move Pieces: {self.move_pieces}",
+            f"│  ├─ Move Pieces: {self.move_pieces}",
+            f"│  └─ Play Like Human: {self.play_like_human}",
             f"│──┬ Stockfish Settings:",
             f"│  ├─ Path: {self.stockfish_path}",
             f"│  ├─ Threads: {self.threads}",

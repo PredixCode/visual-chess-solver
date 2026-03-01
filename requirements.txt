@@ -5,3 +5,4 @@ python-chess
 chessimg2pos
 stockfish
 PyAutoGUI
+human-mouse

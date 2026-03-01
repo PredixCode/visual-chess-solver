@@ -2,6 +2,8 @@ import time
 import logging
 import pyautogui
 
+from human_mouse import MouseController
+
 from vision import VisionManager
 
 
@@ -9,10 +11,12 @@ from vision import VisionManager
 logger = logging.getLogger(__name__)
 
 class InteractionManager:
-    def __init__(self):
-        pyautogui.PAUSE = 0.05 
+    def __init__(self, play_like_human):
+        pyautogui.PAUSE = 0.05
+        self.mouse = MouseController()
+        self.play_like_human: bool = play_like_human
 
-    def execute_move(self, vision: VisionManager, uci_move: str):
+    def execute_move(self, vision: VisionManager, uci_move: str, ):
         """Translates engine UCI (e.g., 'e2e4' or 'e7e8q') to physical mouse clicks."""
         start_sq = uci_move[:2]
         end_sq = uci_move[2:4]
@@ -21,10 +25,11 @@ class InteractionManager:
         try:
             start_pos = vision.get_square_coordinates(start_sq)
             end_pos = vision.get_square_coordinates(end_sq)
-            pyautogui.moveTo(*start_pos)
+
+            self._move_mouse(start_pos)
             pyautogui.click()
             time.sleep(0.05)
-            pyautogui.moveTo(*end_pos)
+            self._move_mouse(end_pos)
             pyautogui.click()
             if promotion:
                 # Assumes auto-queen is on, or double clicking target square secures a queen
@@ -33,3 +38,9 @@ class InteractionManager:
 
         except ValueError as ve:
             logger.error(ve)
+
+    def _move_mouse(self, pos: tuple[int, int]):
+        if self.play_like_human:
+            self.mouse.move(pos[0], pos[1], speed_factor=0.75)
+        else:
+            pyautogui.moveTo(*pos)

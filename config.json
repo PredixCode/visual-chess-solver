@@ -2,12 +2,13 @@
     "stockfish": 
     {
         "path": "stockfish.exe",
-        "threads": "auto",
+        "threads": null,
         "elo": 1500,
-        "thinking_time_in_ms": 1000,
-        "depth": "not limited"
+        "thinking_time_in_ms": null,
+        "depth": null
     },
     "bot": {
-        "move_pieces": true
+        "move_pieces": true,
+        "play_like_human": true
     }
 }

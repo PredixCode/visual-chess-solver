@@ -3,7 +3,7 @@ import logging
 
 from enum import Enum
 
-class TickResult(Enum):
+class MoveResult(Enum):
     NO_MOVE_DETECTED = 1
     MOVE_DETECTED = 2
     ILLEGAL_MOVE = 3
@@ -29,24 +29,24 @@ class BoardController:
             logger.error(f"Invalid starting FEN provided: {e}")
             return False
 
-    def tick(self, detected_fen: str) -> TickResult:
+    def tick(self, detected_fen: str) -> MoveResult:
         """
         Pushes legal moves to see if any result in the newly detected vision FEN.
         """
         detected_fen = detected_fen.strip().split(" ")[0]
         if detected_fen == self.last_confirmed_fen:
-            return TickResult.NO_MOVE_DETECTED
+            return MoveResult.NO_MOVE_DETECTED
 
         for move in self.board.legal_moves:
             self.board.push(move)
             if self.board.fen().split(" ")[0] == detected_fen:
                 logger.info(f"Move Detected: {move.uci()}")
                 self.last_confirmed_fen = detected_fen
-                return TickResult.MOVE_DETECTED
+                return MoveResult.MOVE_DETECTED
                 
             self.board.pop()
 
-        return TickResult.ILLEGAL_MOVE
+        return MoveResult.ILLEGAL_MOVE
     
     @property
     def visual_board_repr(self) -> str:

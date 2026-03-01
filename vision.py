@@ -17,6 +17,8 @@ logger = logging.getLogger(__name__)
 
 class VisionManager:
     def __init__(self):
+        self.sct = mss()
+        
         self.board_rect = None
         self.is_white_bottom = None
         self.monitor_offset_x = 0
@@ -98,20 +100,14 @@ class VisionManager:
         absolute_y = center_y + self.monitor_offset_y
 
         return int(absolute_x), int(absolute_y)
-    
-    def drop_board_position(self) -> None:
-        if self.board_rect is not None:
-            logger.warning("Lost track of board. Searching screen...")
-            self.board_rect = None 
 
     def _capture(self) -> MatLike:
-        with mss() as sct:
-            monitor = sct.monitors[0]
-            self.monitor_offset_x = monitor["left"]
-            self.monitor_offset_y = monitor["top"]
-            
-            screenshot = np.array(sct.grab(monitor))
-            return cv2.cvtColor(screenshot, cv2.COLOR_BGRA2BGR)
+        monitor = self.sct.monitors[0]
+        self.monitor_offset_x = monitor["left"]
+        self.monitor_offset_y = monitor["top"]
+        
+        screenshot = np.array(self.sct.grab(monitor))
+        return cv2.cvtColor(screenshot, cv2.COLOR_BGRA2BGR)
 
     def _crop_frame(self, frame: MatLike) -> MatLike | None:
         try:
