@@ -2,7 +2,7 @@ import logging
 import time
 import chess
 
-from config import BotConfig
+from config import Config
 from vision import VisionManager
 from engine import ChessEngine
 from controller import BoardController, TickResult
@@ -15,8 +15,9 @@ logger = logging.getLogger(__name__)
 class ChessBot:
     INTERFRAME_TIME: float = 0.1
 
-    def __init__(self, config: BotConfig):
+    def __init__(self, config: Config):
         self.config = config
+        logger.info(f"Config: {self.config}")
         self._reset_state()
 
     def _reset_state(self) -> None:
@@ -34,6 +35,7 @@ class ChessBot:
             raw_pieces = self.vision.get_fen()
             
             if not raw_pieces:
+                self.vision.drop_board_position()
                 time.sleep(self.INTERFRAME_TIME)
                 continue
 

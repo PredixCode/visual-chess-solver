@@ -1,8 +1,8 @@
 from stockfish import Stockfish
-from config import BotConfig
+from config import Config
 
 class ChessEngine:
-    def __init__(self, config: BotConfig):
+    def __init__(self, config: Config):
         if config.depth:
             self._engine = Stockfish(path=config.stockfish_path, depth=config.depth)
         else:
@@ -21,5 +21,5 @@ class ChessEngine:
     def set_threads(self, threads: int) -> None:
         self._engine._set_option("Threads", threads)
 
-    def set_thinking_time(self, time_in_s: int) -> None:
-        self._engine._set_option("Minimum Thinking Time", time_in_s)
+    def set_thinking_time(self, time_in_ms: int) -> None:
+        self._engine._set_option("Minimum Thinking Time", time_in_ms)

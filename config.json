@@ -1,6 +1,13 @@
 {
-    "stockfish_path": "stockfish.exe",
-    "threads": 16,
-    "depth": 26,
-    "thinking_time_in_s": 2
+    "stockfish": 
+    {
+        "path": "stockfish.exe",
+        "threads": "auto",
+        "elo": 1500,
+        "thinking_time_in_ms": 1000,
+        "depth": "not limited"
+    },
+    "bot": {
+        "move_pieces": true
+    }
 }
