@@ -1,0 +1,6 @@
+{
+    "stockfish_path": "stockfish.exe",
+    "threads": 16,
+    "depth": 26,
+    "thinking_time_in_s": 2
+}

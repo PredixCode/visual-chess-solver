@@ -9,19 +9,18 @@ from vision import VisionManager
 logger = logging.getLogger(__name__)
 
 class InteractionManager:
-    def __init__(self, vision: VisionManager):
-        self.vision = vision
+    def __init__(self):
         pyautogui.PAUSE = 0.05 
 
-    def execute_move(self, uci_move: str):
+    def execute_move(self, vision: VisionManager, uci_move: str):
         """Translates engine UCI (e.g., 'e2e4' or 'e7e8q') to physical mouse clicks."""
         start_sq = uci_move[:2]
         end_sq = uci_move[2:4]
         promotion = uci_move[4:] if len(uci_move) > 4 else None
 
         try:
-            start_pos = self.vision.get_square_coordinates(start_sq)
-            end_pos = self.vision.get_square_coordinates(end_sq)
+            start_pos = vision.get_square_coordinates(start_sq)
+            end_pos = vision.get_square_coordinates(end_sq)
             pyautogui.moveTo(*start_pos)
             pyautogui.click()
             time.sleep(0.05)

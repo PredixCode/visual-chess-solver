@@ -1,10 +1,16 @@
 from stockfish import Stockfish
+from config import BotConfig
 
 class ChessEngine:
-    def __init__(self, path: str, depth: int=25, threads: int=16, thinking_time_in_s: int=2):
-        self._engine = Stockfish(path=path, depth=depth)
-        self.set_threads(threads)
-        self.set_thinking_time(thinking_time_in_s)
+    def __init__(self, config: BotConfig):
+        if config.depth:
+            self._engine = Stockfish(path=config.stockfish_path, depth=config.depth)
+        else:
+            self._engine = Stockfish(path=config.stockfish_path)
+        if config.threads:
+            self.set_threads(config.threads)
+        if config.think_time:
+            self.set_thinking_time(config.think_time)
 
     def get_best_move(self, fen: str) -> str | None:
         if not self._engine.is_fen_valid(fen):

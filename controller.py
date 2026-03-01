@@ -12,34 +12,36 @@ class TickResult(Enum):
 logger = logging.getLogger(__name__)
 
 class BoardController:
+    STARTER_FEN_ENDING = " w KQkq - 0 1"
+
     def __init__(self):
         self.board = chess.Board()
-        self.last_confirmed_pieces = ""
+        self.last_confirmed_fen = ""
 
     def set_starting_fen(self, pieces_fen: str) -> bool:
         """Initializes the backend board to match the screen's starting state."""
-        full_fen = f"{pieces_fen} w KQkq - 0 1"
+        full_fen = f"{pieces_fen}{self.STARTER_FEN_ENDING}"
         try:
             self.board.set_fen(full_fen)
-            self.last_confirmed_pieces = pieces_fen
+            self.last_confirmed_fen = pieces_fen
             return True
         except ValueError as e:
             logger.error(f"Invalid starting FEN provided: {e}")
             return False
 
-    def tick(self, detected_pieces: str) -> TickResult:
+    def tick(self, detected_fen: str) -> TickResult:
         """
         Pushes legal moves to see if any result in the newly detected vision FEN.
         """
-        detected_pieces = detected_pieces.strip().split(" ")[0]
-        if detected_pieces == self.last_confirmed_pieces:
+        detected_fen = detected_fen.strip().split(" ")[0]
+        if detected_fen == self.last_confirmed_fen:
             return TickResult.NO_MOVE_DETECTED
 
         for move in self.board.legal_moves:
             self.board.push(move)
-            if self.board.fen().split(" ")[0] == detected_pieces:
+            if self.board.fen().split(" ")[0] == detected_fen:
                 logger.info(f"Move Detected: {move.uci()}")
-                self.last_confirmed_pieces = detected_pieces
+                self.last_confirmed_fen = detected_fen
                 return TickResult.MOVE_DETECTED
                 
             self.board.pop()
