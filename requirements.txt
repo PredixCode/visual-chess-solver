@@ -1,0 +1,7 @@
+numpy
+opencv-python
+mss
+python-chess
+chessimg2pos
+stockfish
+PyAutoGUI
