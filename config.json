@@ -9,6 +9,6 @@
     },
     "bot": {
         "move_pieces": true,
-        "play_like_human": true
+        "play_like_human": false
     }
 }

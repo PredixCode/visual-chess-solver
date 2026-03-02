@@ -1,7 +1,7 @@
 import logging
 
 from config import Config
-from bot import ChessBot
+from bot import DesktopBot
 
 
 
@@ -14,5 +14,5 @@ logging.basicConfig(
 
 if __name__ == "__main__":
     c: Config = Config()
-    bot: ChessBot = ChessBot(c)
+    bot: DesktopBot = DesktopBot(c)
     bot.mainloop()

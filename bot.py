@@ -14,7 +14,7 @@ from interaction import InteractionManager
 
 logger = logging.getLogger(__name__)
 
-class ChessBot:
+class DesktopBot:
     INTERFRAME_TIME_S: float = 0.1
     LOST_VISION_TOLERANCE_S: float = 2
 
@@ -24,7 +24,6 @@ class ChessBot:
         self._reset()
 
     def mainloop(self) -> None:
-        
         while True:
             try:
                 self.frame_start_time = time.time()
@@ -75,7 +74,7 @@ class ChessBot:
     def _on_game_start(self, fen) -> None:
         # Grab the dynamically detected color from vision
         self.color = chess.WHITE if self.vision.player_is_white else chess.BLACK
-        logger.info(f"Bot is {self.color}: {fen}")
+        logger.info(f"Bot is {self.color.__str__()}: {fen}")
         
         if self.game.set_starting_fen(fen):
             logger.info(f"New game initialized. Tracking from: {fen}")
@@ -102,7 +101,7 @@ class ChessBot:
             time.sleep(wait_for)
 
     def _handle_to_many_illegal_moves(self) -> None:
-        logger.warning("Lost vision of board...")
+        logger.warning("Lost vision or illegal board state...")
         self.illegal_move_counter = 0
         self.vision.reset()
         if self.color is not None:
