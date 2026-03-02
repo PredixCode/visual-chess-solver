@@ -18,8 +18,10 @@ class BoardController:
         self.board = chess.Board()
         self.last_confirmed_fen = ""
 
-    def set_starting_fen(self, pieces_fen: str) -> bool:
+    def set_starting_fen(self, pieces_fen: str | None) -> bool:
         """Initializes the backend board to match the screen's starting state."""
+        if not pieces_fen:
+            return False
         full_fen = f"{pieces_fen}{self.STARTER_FEN_ENDING}"
         try:
             self.board.set_fen(full_fen)

@@ -4,7 +4,7 @@ import pyautogui
 
 from human_mouse import MouseController
 
-from vision import VisionManager
+from vision import ChessboardScanner
 
 
 
@@ -16,7 +16,7 @@ class InteractionManager:
         self.mouse = MouseController()
         self.play_like_human: bool = play_like_human
 
-    def execute_move(self, vision: VisionManager, uci_move: str, ):
+    def execute_move(self, vision: ChessboardScanner, uci_move: str, ):
         """Translates engine UCI (e.g., 'e2e4' or 'e7e8q') to physical mouse clicks."""
         start_sq = uci_move[:2]
         end_sq = uci_move[2:4]

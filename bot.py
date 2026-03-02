@@ -1,20 +1,21 @@
 import time
+import random
 import logging
 import chess
 
-import random
+from mss import mss
+from abc import ABC, abstractmethod
 
 from config import Config
-from vision import VisionManager
+from vision import ChessboardScanner
 from engine import ChessEngine
 from controller import BoardController, MoveResult
 from interaction import InteractionManager
 
 
-
 logger = logging.getLogger(__name__)
 
-class DesktopBot:
+class Bot(ABC):
     INTERFRAME_TIME_S: float = 0.1
     LOST_VISION_TOLERANCE_S: float = 2
 
@@ -23,34 +24,93 @@ class DesktopBot:
         logger.info(f"Config: {self.config}")
         self._reset()
 
-    def mainloop(self) -> None:
+    def mainloop(self, blocking=True) -> None:
         while True:
             try:
-                self.frame_start_time = time.time()
-                detected_fen = self.vision.get_fen()
-                
-                if not detected_fen:
-                    self.illegal_move_counter += 1
-                    if self.illegal_move_counter > self.allowed_illegal_moves:
-                        self._handle_to_many_illegal_moves()
-                    continue
-
-                if self.is_game_start:
-                    self._on_game_start(detected_fen)
-                    continue
-
-                move_result: MoveResult = self.game.tick(detected_fen)
-                
-                if move_result == MoveResult.MOVE_DETECTED:
-                    self._handle_move()
-                elif move_result == MoveResult.ILLEGAL_MOVE:
-                    self.illegal_move_counter += 1
-                    if self.illegal_move_counter > self.allowed_illegal_moves:
-                        self._handle_to_many_illegal_moves()
-                        
+                self._main()
             finally:
                 self._wait()
+            
+            if not blocking:
+                break
 
+    def _main(self) -> None:
+        self.frame_start_time = time.time()
+        self.detected_fen = self._detect_fen()
+        
+        if not self.detected_fen:
+            self._increment_illegal_state()
+            return
+
+        if self.is_game_start:
+            self._on_game_start()
+            return
+        
+        move_result: MoveResult = self.game.tick(self.detected_fen)
+
+        if move_result == MoveResult.MOVE_DETECTED:
+            logger.info(f"Move Detected: \n{self.game.visual_board_repr}")
+            best_move = self._get_best_move()
+            self._execute_move(best_move)
+        elif move_result == MoveResult.ILLEGAL_MOVE:
+            self._increment_illegal_state()
+        
+    @property
+    @abstractmethod
+    def detected_player_color(self) -> chess.Color: 
+        pass
+
+    @abstractmethod
+    def _detect_fen(self) -> str | None: 
+        pass
+
+    @abstractmethod
+    def _execute_move(self, move: str | None) -> None: 
+        pass
+
+    def _reset(self) -> None:
+        self.engine = ChessEngine(self.config)
+        self.game = BoardController()
+    
+        self.detected_fen: str | None = None
+        self.illegal_state_counter: int = 0
+        self.is_game_start: bool = True
+        self.color: chess.Color | None = None
+        self.frame_start_time: float = time.time()
+        logger.info("Starting Chess Bot. Looking for board...")        
+
+    def _on_game_start(self) -> None:
+        if self.game.set_starting_fen(self.detected_fen):
+            self.color = self.detected_player_color
+            color_name = "WHITE" if self.color else "BLACK"
+            logger.info(f"Bot is {color_name}: {self.detected_fen}")
+            logger.info(f"New game initialized. Detected fen from board: {self.detected_fen}")
+            self.is_game_start = False
+            
+            # Ensure it is actually our turn before asking the engine to move
+            if self.game.board.turn == self.color:
+                move = self.engine.get_best_move(self.game.board.fen())
+                self._execute_move(move)
+
+    def _wait(self) -> None:
+        wait_for = self.INTERFRAME_TIME_S - self.elapsed_frametime_s
+        if wait_for > 0:
+            time.sleep(wait_for)
+
+    def _get_best_move(self) -> str | None:
+        if self.game.board.turn == self.color:
+            return self.engine.get_best_move(self.game.board.fen()) if not self.config.play_like_human else self.engine.get_best_move(self.game.board.fen(), self._human_thinking_time_ms)
+        return None
+    
+    def _increment_illegal_state(self) -> None:
+        self.illegal_state_counter += 1
+        if self.illegal_state_counter > self.allowed_illegal_moves:
+            self._handle_too_long_illegal_state()
+    
+    def _handle_too_long_illegal_state(self) -> None:
+        logger.warning("Lost vision or illegal board state...")
+        self.illegal_state_counter = 0
+    
     @property
     def elapsed_frametime_s(self) -> float:
         return time.time() - self.frame_start_time
@@ -58,57 +118,37 @@ class DesktopBot:
     @property
     def allowed_illegal_moves(self) -> int:
         return int(self.LOST_VISION_TOLERANCE_S/self.INTERFRAME_TIME_S)
-
-    def _reset(self) -> None:
-        self.vision = VisionManager()
-        self.engine = ChessEngine(self.config)
-        self.game = BoardController()
-        self.actor = InteractionManager(self.config.play_like_human)
-
-        self.is_game_start = True
-        self.color = None
-        self.frame_start_time = time.time()
-        self.illegal_move_counter = 0
-        logger.info("Starting Chess Bot. Looking for board...")
-
-    def _on_game_start(self, fen) -> None:
-        # Grab the dynamically detected color from vision
-        self.color = chess.WHITE if self.vision.player_is_white else chess.BLACK
-        logger.info(f"Bot is {self.color.__str__()}: {fen}")
-        
-        if self.game.set_starting_fen(fen):
-            logger.info(f"New game initialized. Tracking from: {fen}")
-            self.is_game_start = False
-            
-            if self.game.board.turn == self.color:
-                suggestion = self.engine.get_best_move(self.game.board.fen())
-                if suggestion:
-                    logger.info(f"Executing Initial Engine Move: {suggestion}")
-                    self.actor.execute_move(self.vision, suggestion)
-
-    def _handle_move(self):
-        logger.info(f"Move Detected: \n{self.game.visual_board_repr}")
-        if self.game.board.turn == self.color:
-            suggestion = self.engine.get_best_move(self.game.board.fen()) if not self.config.play_like_human else self.engine.get_best_move(self.game.board.fen(), self._human_thinking_time_ms())
-
-            if suggestion:
-                logger.info(f"Executing Engine Move: {suggestion}")
-                self.actor.execute_move(self.vision, suggestion)
-
-    def _wait(self) -> None:
-        wait_for = self.INTERFRAME_TIME_S - self.elapsed_frametime_s
-        if wait_for > 0:
-            time.sleep(wait_for)
-
-    def _handle_to_many_illegal_moves(self) -> None:
-        logger.warning("Lost vision or illegal board state...")
-        self.illegal_move_counter = 0
-        self.vision.reset()
-        if self.color is not None:
-            self.vision.is_white_at_bottom = (self.color == chess.WHITE)
-        
-
+    
+    @property
     def _human_thinking_time_ms(self) -> int:
         think_for = random.randint(2000,10000) if self.game.board.fullmove_number > 3 else random.randint(1000,4000)
         elapsed_ms = int(self.elapsed_frametime_s*1000)
         return max(think_for - elapsed_ms, 500)
+
+
+class AndroidBot(Bot):
+    pass
+
+
+class DesktopBot(Bot):
+    def _detect_fen(self) -> str | None: 
+        return self.scanner.get_fen()
+
+    def _reset(self) -> None:
+        self.scanner = ChessboardScanner()
+        self.actor = InteractionManager(self.config.play_like_human)
+        super()._reset()
+
+    def _execute_move(self, move: str | None) -> None:
+        if move:
+            logger.info(f"Executing Bot Move: {move}")
+            self.actor.execute_move(self.scanner, move)
+
+    def _handle_too_long_illegal_state(self) -> None:
+        super()._handle_too_long_illegal_state()
+        c = (self.color == chess.WHITE)
+        self.scanner.reset(c)
+
+    @property
+    def detected_player_color(self) -> chess.Color:
+        return chess.WHITE if self.scanner.player_is_white else chess.BLACK
