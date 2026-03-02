@@ -15,8 +15,8 @@ from interaction import InteractionManager
 logger = logging.getLogger(__name__)
 
 class ChessBot:
-    INTERFRAME_TIME: float = 0.1
-    LOST_VISION_TIME: float = 2
+    INTERFRAME_TIME_S: float = 0.1
+    LOST_VISION_TOLERANCE_S: float = 2
 
     def __init__(self, config: Config):
         self.config = config
@@ -24,13 +24,16 @@ class ChessBot:
         self._reset()
 
     def mainloop(self) -> None:
-        illegal_move_counter = 0
+        
         while True:
             try:
                 self.frame_start_time = time.time()
                 detected_fen = self.vision.get_fen()
                 
                 if not detected_fen:
+                    self.illegal_move_counter += 1
+                    if self.illegal_move_counter > self.allowed_illegal_moves:
+                        self._handle_to_many_illegal_moves()
                     continue
 
                 if self.is_game_start:
@@ -42,10 +45,10 @@ class ChessBot:
                 if move_result == MoveResult.MOVE_DETECTED:
                     self._handle_move()
                 elif move_result == MoveResult.ILLEGAL_MOVE:
-                    illegal_move_counter += 1
-                    if illegal_move_counter > self.allowed_illegal_moves:
+                    self.illegal_move_counter += 1
+                    if self.illegal_move_counter > self.allowed_illegal_moves:
                         self._handle_to_many_illegal_moves()
-                        illegal_move_counter = 0
+                        
             finally:
                 self._wait()
 
@@ -55,7 +58,7 @@ class ChessBot:
     
     @property
     def allowed_illegal_moves(self) -> int:
-        return int(self.LOST_VISION_TIME/self.INTERFRAME_TIME)
+        return int(self.LOST_VISION_TOLERANCE_S/self.INTERFRAME_TIME_S)
 
     def _reset(self) -> None:
         self.vision = VisionManager()
@@ -66,11 +69,13 @@ class ChessBot:
         self.is_game_start = True
         self.color = None
         self.frame_start_time = time.time()
+        self.illegal_move_counter = 0
         logger.info("Starting Chess Bot. Looking for board...")
 
     def _on_game_start(self, fen) -> None:
         # Grab the dynamically detected color from vision
-        self.color = chess.WHITE if self.vision.is_white_bottom else chess.BLACK
+        self.color = chess.WHITE if self.vision.player_is_white else chess.BLACK
+        logger.info(f"Bot is {self.color}: {fen}")
         
         if self.game.set_starting_fen(fen):
             logger.info(f"New game initialized. Tracking from: {fen}")
@@ -92,13 +97,17 @@ class ChessBot:
                 self.actor.execute_move(self.vision, suggestion)
 
     def _wait(self) -> None:
-        wait_for = self.INTERFRAME_TIME - self.elapsed_frametime_s
+        wait_for = self.INTERFRAME_TIME_S - self.elapsed_frametime_s
         if wait_for > 0:
             time.sleep(wait_for)
 
     def _handle_to_many_illegal_moves(self) -> None:
         logger.warning("Lost vision of board...")
-        self.vision = VisionManager()
+        self.illegal_move_counter = 0
+        self.vision.reset()
+        if self.color is not None:
+            self.vision.is_white_at_bottom = (self.color == chess.WHITE)
+        
 
     def _human_thinking_time_ms(self) -> int:
         think_for = random.randint(2000,10000) if self.game.board.fullmove_number > 3 else random.randint(1000,4000)

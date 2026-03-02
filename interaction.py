@@ -41,6 +41,6 @@ class InteractionManager:
 
     def _move_mouse(self, pos: tuple[int, int]):
         if self.play_like_human:
-            self.mouse.move(pos[0], pos[1], speed_factor=0.75)
+            self.mouse.move(pos[0], pos[1])
         else:
             pyautogui.moveTo(*pos)

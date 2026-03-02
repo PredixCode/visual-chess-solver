@@ -1,9 +1,11 @@
 import io
 import re
+import os
 import logging
 import cv2
 import numpy as np
 
+from datetime import datetime
 from cv2.typing import MatLike
 from PIL import Image
 from mss import mss
@@ -16,22 +18,25 @@ from chessimg2pos.chessboard_finder import detect_chessboard_corners
 logger = logging.getLogger(__name__)
 
 class VisionManager:
-    def __init__(self):
+    def __init__(self, debug_dir: str = "captured_boards"):
         self.sct = mss()
-        
+        self.reset()
+
+    def reset(self):
         self.board_rect = None
-        self.is_white_bottom = None
+        self.is_white_at_bottom = None
         self.monitor_offset_x = 0
         self.monitor_offset_y = 0
         self.current_raw_fen = None
+        self.active_monitor_idx = None
 
     @property
     def player_is_white(self) -> bool | None:
-        if self.is_white_bottom is None:
-            self.is_white_bottom = self.autodetect_perspective(self.current_raw_fen)
-        return self.is_white_bottom
+        if self.is_white_at_bottom is None:
+            self.is_white_at_bottom = self.get_player_color(self.current_raw_fen)
+        return self.is_white_at_bottom
 
-    def autodetect_perspective(self, raw_fen: str | None) -> bool | None:
+    def get_player_color(self, raw_fen: str | None) -> bool | None:
         """Looks at the top of the image to determine board orientation."""
         if raw_fen is None:
             return None
@@ -49,24 +54,49 @@ class VisionManager:
             return True
 
     def get_fen(self) -> str | None:
-        frame: MatLike = self._capture()
-
-        if self.board_rect is None:
-            self.board_rect = self._find_board(frame)
+        frame = None
+        # 1. If we are locked onto a specific monitor, only capture that one
+        if self.active_monitor_idx is not None:
+            frame = self._capture(self.active_monitor_idx)
+            
+            if self.board_rect is None:
+                self.board_rect = self._find_board(frame)
+                
             if self.board_rect is None:
                 return None
+                
+            cropped_frame = self._crop_frame(frame)
+            if cropped_frame is None:
+                return None
+                
+        # 2. If we don't know the monitor, scan all available individual screens
+        else:
+            found = False
+            # Start at 1 to skip monitors[0] (the stitched multi-monitor bounding box)
+            for i in range(1, len(self.sct.monitors)):
+                frame = self._capture(i)
+                board_rect = self._find_board(frame)
+                
+                if board_rect is not None:
+                    logger.info(f"Board found on Monitor {i}!")
+                    self.active_monitor_idx = i
+                    self.board_rect = board_rect
+                    found = True
+                    break
+            
+            if not found or frame is None:
+                return None # Board not found on any monitor
+                
+            cropped_frame = self._crop_frame(frame)
+            if cropped_frame is None:
+                return None
 
-        cropped_frame = self._crop_frame(frame)
-        if cropped_frame is None:
-            return None
-
+        # 3. Predict FEN from the successfully cropped board
         fen = self._predict_fen_from_image(cropped_frame)
         if fen is None:
             return None
         
         self.current_raw_fen = fen
-        if not self.player_is_white:
-            fen = fen[::-1]
         return fen
     
     def get_square_coordinates(self, square_name: str) -> tuple[int, int]:
@@ -101,8 +131,9 @@ class VisionManager:
 
         return int(absolute_x), int(absolute_y)
 
-    def _capture(self) -> MatLike:
-        monitor = self.sct.monitors[0]
+    def _capture(self, monitor_idx: int) -> MatLike:
+        """Captures a specific monitor rather."""
+        monitor = self.sct.monitors[monitor_idx]
         self.monitor_offset_x = monitor["left"]
         self.monitor_offset_y = monitor["top"]
         
