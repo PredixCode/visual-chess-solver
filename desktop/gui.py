@@ -1,20 +1,18 @@
 import customtkinter as ctk
 
-from config import Config
-
 class GUI:
-    def __init__(self, config: Config, start_cmd=None, stop_cmd=None, restart_cmd=None) -> None:
+    # Removed restart_cmd, we only need start and stop now!
+    def __init__(self, config, start_cmd=None, stop_cmd=None) -> None:
         ctk.set_appearance_mode("dark")
         ctk.set_default_color_theme("blue")
         
         self.app = ctk.CTk()
-        self.app.title("Chess Solver")
+        self.app.title("Chess Solver - Live Configuration")
         self.app.geometry("500x750")
         
         self.config = config
         self.start_cmd = start_cmd
         self.stop_cmd = stop_cmd
-        self.restart_cmd = restart_cmd
         
         self._build_ui()
 
@@ -38,7 +36,11 @@ class GUI:
         ctk.CTkLabel(bot_mode_frame, text="Active Bot:").pack(side="left", padx=(10, 20))
         
         self.bot_mode_var = ctk.StringVar(value=self.config.mode)
-        self.bot_type_selector = ctk.CTkSegmentedButton(bot_mode_frame, values=["Desktop", "Remote Phone"], variable=self.bot_mode_var)
+        self.bot_type_selector = ctk.CTkSegmentedButton(
+            bot_mode_frame, values=["Desktop", "Remote Phone"], 
+            variable=self.bot_mode_var,
+            command=self.on_mode_change 
+        )
         self.bot_type_selector.pack(side="left", fill="x", expand=True)
 
         # --- Vision Mode Selector ---
@@ -47,20 +49,32 @@ class GUI:
         ctk.CTkLabel(vision_mode_frame, text="Vision Mode:").pack(side="left", padx=(10, 20))
         
         self.vision_mode_var = ctk.StringVar(value=self.config.vision_mode)
-        self.vision_type_selector = ctk.CTkSegmentedButton(vision_mode_frame, values=["2D", "3D"], variable=self.vision_mode_var)
+        self.vision_type_selector = ctk.CTkSegmentedButton(
+            vision_mode_frame, values=["2D", "3D"], 
+            variable=self.vision_mode_var,
+            command=self.on_mode_change 
+        )
         self.vision_type_selector.pack(side="left", fill="x", expand=True)
-        
+
         # --- Bot Settings Frame ---
         bot_frame = ctk.CTkFrame(self.app)
         bot_frame.pack(padx=20, pady=10, fill="x")
         
         self.move_pieces_var = ctk.BooleanVar(value=self.config.move_pieces)
-        ctk.CTkSwitch(bot_frame, text="Move Pieces", variable=self.move_pieces_var).grid(row=1, column=0, padx=20, pady=10, sticky="w")
+        self.move_pieces_switch = ctk.CTkSwitch(
+            bot_frame, text="Move Pieces", 
+            variable=self.move_pieces_var, 
+            command=self.update_visibility 
+        )
+        self.move_pieces_switch.grid(row=1, column=0, padx=20, pady=10, sticky="w")
 
         self.play_human_var = ctk.BooleanVar(value=self.config.play_like_human)
-        ctk.CTkSwitch(bot_frame, text="Play Like Human", variable=self.play_human_var).grid(row=2, column=0, padx=20, pady=10, sticky="w")
+        self.play_human_switch = ctk.CTkSwitch(bot_frame, text="Play Like Human", variable=self.play_human_var)
+        self.play_human_switch.grid(row=2, column=0, padx=20, pady=10, sticky="w")
 
-        ctk.CTkLabel(bot_frame, text="Phone Stream URL:").grid(row=3, column=0, padx=20, pady=(10, 0), sticky="w")
+        self.stream_url_label = ctk.CTkLabel(bot_frame, text="Phone Stream URL:")
+        self.stream_url_label.grid(row=3, column=0, padx=20, pady=(10, 0), sticky="w")
+        
         self.stream_url_entry = ctk.CTkEntry(bot_frame, width=300)
         self.stream_url_entry.insert(0, self.config.phone_stream_url)
         self.stream_url_entry.grid(row=4, column=0, padx=20, pady=(0, 10), sticky="w")
@@ -83,9 +97,37 @@ class GUI:
         self.sf_time_entry = add_sf_entry(4, "Thinking Time (ms, empty=max):", self.config.think_time)
         self.sf_depth_entry = add_sf_entry(5, "Depth (empty=max):", self.config.depth)
 
-        # --- Save & Reload Button ---
+        # --- Save Config Button ---
         self.save_btn = ctk.CTkButton(self.app, text="Save Config", command=self.save_and_reload)
         self.save_btn.pack(pady=20)
+
+        # Trigger initial UI state on load
+        self.update_visibility()
+
+    # --- Dynamic UI Logic ---
+    def update_visibility(self, *args):
+        mode = self.bot_mode_var.get()
+        move_pieces = self.move_pieces_var.get()
+
+        if mode == "Remote Phone":
+            self.move_pieces_switch.grid_remove()
+            self.play_human_switch.grid_remove()
+            
+            self.stream_url_label.grid()
+            self.stream_url_entry.grid()
+        else:
+            self.stream_url_label.grid_remove()
+            self.stream_url_entry.grid_remove()
+            
+            self.move_pieces_switch.grid()
+            if move_pieces:
+                self.play_human_switch.grid()
+            else:
+                self.play_human_switch.grid_remove()
+
+    def on_mode_change(self, selected_value=None):
+        self.update_visibility()
+        self.save_and_reload()
 
     # --- Control Methods ---
     def start_bot(self):
@@ -103,7 +145,7 @@ class GUI:
     def save_and_reload(self):
         new_mode = self.bot_mode_var.get()
         old_mode = self.config.mode
-
+        
         new_vision = self.vision_mode_var.get()
         old_vision = self.config.vision_mode
 
@@ -120,12 +162,12 @@ class GUI:
         self.config.file_data["stockfish"]["depth"] = self._get_int_or_null(self.sf_depth_entry.get())
 
         self.config.persist()
-        print(f"Config saved! Bot: {new_mode} | Vision: {new_vision}")
+        print(f"Config saved! Bot Mode: {new_mode} | Vision Mode: {new_vision}")
 
-        # If mode changed, force a full restart to swap mode
-        if (old_mode != new_mode or old_vision != new_vision) and self.restart_cmd:
-            print("Mode changed! Re-initializing bot...")
-            self.restart_cmd()
+        # If a core mode changed, gracefully stop the bot and wait for the user to press start.
+        if (old_mode != new_mode or old_vision != new_vision) and self.stop_cmd:
+            print("Core mode changed! Stopping active bot. Please click 'Start Bot' when ready.")
+            self.stop_cmd()
 
     def run(self):
         self.app.mainloop()

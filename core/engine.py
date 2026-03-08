@@ -1,5 +1,5 @@
 from stockfish import Stockfish
-from config import Config
+from core.config import Config
 
 class ChessEngine:
     def __init__(self, config: Config):

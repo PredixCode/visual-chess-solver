@@ -3,12 +3,12 @@
         "path": "stockfish.exe",
         "threads": null,
         "elo": null,
-        "thinking_time_in_ms": 1000,
+        "thinking_time_in_ms": 2000,
         "depth": null
     },
     "bot": {
         "mode": "Remote Phone",
-        "move_pieces": true,
+        "move_pieces": false,
         "play_like_human": false,
         "phone": {
             "stream_url": "http://192.168.178.81:8080/stream.mjpeg"

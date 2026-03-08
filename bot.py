@@ -1,15 +1,15 @@
 import time
 import random
 import logging
-import cv2
 import chess
 
 from abc import ABC, abstractmethod
-from config import Config
-from vision import ChessboardScanner
-from engine import ChessEngine
-from controller import BoardController, MoveResult
-from interaction import InteractionManager
+from core.config import Config
+from core.vision.vision import ChessboardVision, DesktopVision, RemoteVision
+from core.vision.process import Vision2D, Vision3D 
+from core.engine import ChessEngine
+from core.controller import BoardController, MoveResult
+from core.interaction import InteractionManager
 
 
 logger = logging.getLogger(__name__)
@@ -20,6 +20,7 @@ class Bot(ABC):
 
     def __init__(self, config: Config):
         self.config = config
+        self.scanner: ChessboardVision
         self.running = False
         logger.info(f"Config: {self.config}")
 
@@ -37,13 +38,12 @@ class Bot(ABC):
                 break
     
     def stop(self) -> None:
-        """Gracefully signals the mainloop to stop and cleans up resources."""
         self.running = False
         self.cleanup()
 
     def cleanup(self) -> None:
-        """Override this in subclasses to release resources (cameras, etc.)"""
-        pass
+        if hasattr(self, 'scanner'):
+            self.scanner.image_source.cleanup()
 
     def _main(self) -> None:
         self.frame_start_time = time.time()
@@ -65,15 +65,9 @@ class Bot(ABC):
             self._execute_move(best_move)
         elif move_result == MoveResult.ILLEGAL_MOVE:
             self._increment_illegal_state()
-        
-    @property
-    @abstractmethod
-    def detected_player_color(self) -> chess.Color: 
-        pass
 
-    @abstractmethod
     def _detect_fen(self) -> str | None: 
-        pass
+        return self.scanner.get_fen()
 
     @abstractmethod
     def _execute_move(self, move: str | None) -> None: 
@@ -92,13 +86,12 @@ class Bot(ABC):
 
     def _on_game_start(self) -> None:
         if self.game.set_starting_fen(self.detected_fen):
-            self.color = self.detected_player_color
+            self.color = self.player_color
             color_name = "WHITE" if self.color else "BLACK"
             logger.info(f"Bot is {color_name}: {self.detected_fen}")
             logger.info(f"New game initialized. Detected fen from board: {self.detected_fen}")
             self.is_game_start = False
             
-            # Ensure it is actually our turn before asking the engine to move
             if self.game.board.turn == self.color:
                 move = self.engine.get_best_move(self.game.board.fen())
                 self._execute_move(move)
@@ -121,6 +114,13 @@ class Bot(ABC):
     def _handle_too_long_illegal_state(self) -> None:
         logger.warning("Lost vision or illegal board state...")
         self.illegal_state_counter = 0
+        if hasattr(self, 'scanner'):
+            c = (self.color == chess.WHITE)
+            self.scanner.reset(c)
+
+    @property
+    def player_color(self) -> chess.Color:
+        return chess.WHITE if self.scanner.player_is_white else chess.BLACK
     
     @property
     def elapsed_frametime_s(self) -> float:
@@ -138,51 +138,23 @@ class Bot(ABC):
 
 
 class RemotePhoneBot(Bot):
-    def cleanup(self) -> None:
-        if hasattr(self, 'cap') and self.cap.isOpened():
-            self.cap.release()
-        cv2.destroyAllWindows()
-
-    def _detect_fen(self) -> str | None: 
-        ret, frame = self.cap.read()
-
-        if not ret:
-            logger.warning("Failed to grab frame. Stream might have ended.")
-            return None
-        
-        cv2.imshow('Phone Screen Stream', frame)
-        cv2.waitKey(1)
-        # TODO: Pass frame to computer vision logic
-        return None
-
     def _reset(self) -> None:
-        self.cap = cv2.VideoCapture(self.config.phone_stream_url)
-
-        self.cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
-
-        if not self.cap.isOpened():
-            print("Error: Could not open the stream. Check your URL and Wi-Fi connection.")
-            exit()
+        vision_method = Vision3D() if self.config.vision_mode == "3D" else Vision2D()
+        source = RemoteVision(self.config, vision_method)
+        
+        self.scanner = ChessboardVision(source)
         super()._reset()
 
     def _execute_move(self, move: str | None) -> None:
         pass
 
-    def _handle_too_long_illegal_state(self) -> None:
-        super()._handle_too_long_illegal_state()
-
-    @property
-    def detected_player_color(self) -> chess.Color:
-        return chess.WHITE
-
 
 class DesktopBot(Bot):
-    def _detect_fen(self) -> str | None: 
-        return self.scanner.get_fen()
-
     def _reset(self) -> None:
-        vision_idx = 1 if self.config.vision_mode == "3D" else 0
-        self.scanner = ChessboardScanner(active_vision_method=vision_idx)
+        vision_method = Vision3D() if self.config.vision_mode == "3D" else Vision2D()
+        source = DesktopVision(vision_method)
+        
+        self.scanner = ChessboardVision(source)
         self.actor = InteractionManager(self.config.play_like_human)
         super()._reset()
 
@@ -190,18 +162,3 @@ class DesktopBot(Bot):
         if move:
             logger.info(f"Executing Bot Move: {move}")
             self.actor.execute_move(self.scanner, move)
-
-    def _handle_too_long_illegal_state(self) -> None:
-        super()._handle_too_long_illegal_state()
-        c = (self.color == chess.WHITE)
-        self.scanner.reset(c)
-
-    @property
-    def detected_player_color(self) -> chess.Color:
-        return chess.WHITE if self.scanner.player_is_white else chess.BLACK
-    
-
-if __name__ == "__main__":
-    c: Config = Config()
-    bot = RemotePhoneBot(c)
-    bot.mainloop()

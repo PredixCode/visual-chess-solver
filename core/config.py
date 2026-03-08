@@ -59,7 +59,8 @@ class Config:
     
     @cached_property
     def stockfish_path(self) -> str:
-        base_dir = os.path.dirname(os.path.abspath(__file__))
+        core_dir = os.path.dirname(os.path.abspath(__file__)) # get this directory
+        base_dir = os.path.dirname(core_dir) # goto root project folder
         return os.path.join(base_dir, self.stockfish_config["path"])
     
     @cached_property
