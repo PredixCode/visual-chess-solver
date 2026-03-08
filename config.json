@@ -1,6 +1,5 @@
 {
-    "stockfish": 
-    {
+    "stockfish": {
         "path": "stockfish.exe",
         "threads": null,
         "elo": null,
@@ -8,7 +7,12 @@
         "depth": null
     },
     "bot": {
+        "mode": "Remote Phone",
         "move_pieces": true,
-        "play_like_human": false
+        "play_like_human": false,
+        "phone": {
+            "stream_url": "http://192.168.178.81:8080/stream.mjpeg"
+        },
+        "vision_mode": "2D"
     }
 }

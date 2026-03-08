@@ -45,6 +45,10 @@ class Vision3D:
     def __init__(self):
         pass
 
+    def get_fen(self, cropped_board_img: np.ndarray) -> str | None:
+        logger.warning("3D Vision get_fen() called but not yet implemented.")
+        return None
+
 
 
 # Fen Utils
@@ -69,7 +73,7 @@ class ChessboardScanner:
     def __init__(self, active_vision_method: int=0):
         self.sct = mss()
         self.reset()
-        self.vision_methods: list[Vision2D] = [Vision2D()]
+        self.vision_methods = [Vision2D(), Vision3D()]
         self.active_vision_method: int = active_vision_method
         self.autodetect_vision_method: bool = True
 
@@ -82,7 +86,7 @@ class ChessboardScanner:
         self.active_monitor_idx = None
 
     @property
-    def vision(self) -> Vision2D:
+    def vision(self): 
         return self.vision_methods[self.active_vision_method]
 
     @property

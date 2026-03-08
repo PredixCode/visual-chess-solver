@@ -6,3 +6,4 @@ chessimg2pos
 stockfish
 PyAutoGUI
 human-mouse
+customtkinter

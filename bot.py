@@ -1,11 +1,10 @@
 import time
 import random
 import logging
+import cv2
 import chess
 
-from mss import mss
 from abc import ABC, abstractmethod
-
 from config import Config
 from vision import ChessboardScanner
 from engine import ChessEngine
@@ -21,11 +20,14 @@ class Bot(ABC):
 
     def __init__(self, config: Config):
         self.config = config
+        self.running = False
         logger.info(f"Config: {self.config}")
-        self._reset()
 
     def mainloop(self, blocking=True) -> None:
-        while True:
+        self._reset()
+
+        self.running = True
+        while self.running:
             try:
                 self._main()
             finally:
@@ -33,6 +35,15 @@ class Bot(ABC):
             
             if not blocking:
                 break
+    
+    def stop(self) -> None:
+        """Gracefully signals the mainloop to stop and cleans up resources."""
+        self.running = False
+        self.cleanup()
+
+    def cleanup(self) -> None:
+        """Override this in subclasses to release resources (cameras, etc.)"""
+        pass
 
     def _main(self) -> None:
         self.frame_start_time = time.time()
@@ -126,8 +137,43 @@ class Bot(ABC):
         return max(think_for - elapsed_ms, 500)
 
 
-class AndroidBot(Bot):
-    pass
+class RemotePhoneBot(Bot):
+    def cleanup(self) -> None:
+        if hasattr(self, 'cap') and self.cap.isOpened():
+            self.cap.release()
+        cv2.destroyAllWindows()
+
+    def _detect_fen(self) -> str | None: 
+        ret, frame = self.cap.read()
+
+        if not ret:
+            logger.warning("Failed to grab frame. Stream might have ended.")
+            return None
+        
+        cv2.imshow('Phone Screen Stream', frame)
+        cv2.waitKey(1)
+        # TODO: Pass frame to computer vision logic
+        return None
+
+    def _reset(self) -> None:
+        self.cap = cv2.VideoCapture(self.config.phone_stream_url)
+
+        self.cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+
+        if not self.cap.isOpened():
+            print("Error: Could not open the stream. Check your URL and Wi-Fi connection.")
+            exit()
+        super()._reset()
+
+    def _execute_move(self, move: str | None) -> None:
+        pass
+
+    def _handle_too_long_illegal_state(self) -> None:
+        super()._handle_too_long_illegal_state()
+
+    @property
+    def detected_player_color(self) -> chess.Color:
+        return chess.WHITE
 
 
 class DesktopBot(Bot):
@@ -135,7 +181,8 @@ class DesktopBot(Bot):
         return self.scanner.get_fen()
 
     def _reset(self) -> None:
-        self.scanner = ChessboardScanner()
+        vision_idx = 1 if self.config.vision_mode == "3D" else 0
+        self.scanner = ChessboardScanner(active_vision_method=vision_idx)
         self.actor = InteractionManager(self.config.play_like_human)
         super()._reset()
 
@@ -152,3 +199,9 @@ class DesktopBot(Bot):
     @property
     def detected_player_color(self) -> chess.Color:
         return chess.WHITE if self.scanner.player_is_white else chess.BLACK
+    
+
+if __name__ == "__main__":
+    c: Config = Config()
+    bot = RemotePhoneBot(c)
+    bot.mainloop()

@@ -1,3 +1,0 @@
-OOP Bot, Desktop Bot, Android Bot
-OOP interaction -> VisionManager, 2DVisionManager, 3DVisionManager
-Add GUI
