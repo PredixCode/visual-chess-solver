@@ -71,8 +71,9 @@ class DesktopVision(VisionSource):
 
 
 class RemoteVision(VisionSource):
-    def __init__(self, config: Config, vision_method: Vision2D|Vision3D) -> None:
+    def __init__(self, config: Config, vision_method: Vision2D|Vision3D, show_stream:bool = True) -> None:
         super().__init__(vision_method)
+        self.show_stream = show_stream
 
         self.cap = cv2.VideoCapture(config.phone_stream_url)
         self.cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
@@ -80,20 +81,28 @@ class RemoteVision(VisionSource):
             print("Error: Could not open the stream. Check your URL and Wi-Fi connection.")
             exit()
 
-    def get_frame(self) -> MatLike | None:
+    def get_frame(self, raw_stream=True) -> MatLike | None:
         ret, frame = self.cap.read()
 
         if not ret:
             logger.warning("Failed to grab frame. Stream might have ended.")
             return None
         
+        if raw_stream:
+            self._show_stream(frame)
+        
         cropped_frame = self._process_frame(frame)
-        if cropped_frame is not None:
-            cv2.imshow('Phone Screen Stream', cropped_frame)
-            cv2.waitKey(1)
+        if cropped_frame is not None and not raw_stream:
+            self._show_stream(cropped_frame)
+            
         return cropped_frame
 
     def cleanup(self):
         if hasattr(self, 'cap') and self.cap.isOpened():
             self.cap.release()
         cv2.destroyAllWindows()
+
+    def _show_stream(self, frame: MatLike):
+        if self.show_stream:
+            cv2.imshow('Phone Screen Stream', frame)
+            cv2.waitKey(1)

@@ -146,7 +146,8 @@ class RemotePhoneBot(Bot):
         super()._reset()
 
     def _execute_move(self, move: str | None) -> None:
-        pass
+        if move:
+            logger.info(f"🤖 RECOMMENDED MOVE: {move.upper()}")
 
 
 class DesktopBot(Bot):
